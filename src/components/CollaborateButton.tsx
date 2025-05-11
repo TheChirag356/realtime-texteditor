@@ -21,22 +21,30 @@ import { Input } from "@/components/ui/input";
 import React from "react";
 import random from "random-name";
 import { Session } from "@/components/EditorNavbar";
+import { useUserStore } from "@/store/UserStore";
 
 export default function CollaborateButton() {
-
   const session: Session = {
     id: "test-room",
-    isSessionLive: false,
+    isSessionLive: true,
   };
 
-  const [username, setUsername] = React.useState(random.first());
+  const setUsername = useUserStore((state) => state.setUsername);
+  const username = useUserStore((state) => state.username);
+
+  React.useEffect(() => {
+    if (!username) {
+      setUsername(random.first());
+    }
+  }, [username, setUsername]);
+
   const [isSessionLive, setIsSessionLive] = React.useState(
     session.isSessionLive
   );
   const [copy, setCopy] = React.useState(true);
-  const shareLink = `/editor/${session.id}`;
+  const shareLink = `/${session.id}`;
 
-  const handleChangeUsername = (e: any) => {
+  const handleChangeUsername = (e: React.ChangeEvent<HTMLInputElement>) => {
     try {
       setUsername(e.target.value);
     } catch (error) {
@@ -49,7 +57,7 @@ export default function CollaborateButton() {
       setCopy(false);
       navigator.clipboard.writeText(shareLink);
     } catch (error) {
-      console.error("Error changing copying the url:", error);
+      console.error("Error copying the url:", error);
     } finally {
       setTimeout(() => {
         setCopy(true);
@@ -98,8 +106,8 @@ export default function CollaborateButton() {
               <div>
                 <Label>Your Name</Label>
                 <Input
-                  type="username"
-                  value={username}
+                  type="text"
+                  value={username ?? ""}
                   onChange={handleChangeUsername}
                 />
               </div>

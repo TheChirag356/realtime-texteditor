@@ -1,9 +1,8 @@
-import { Menu, Send } from "lucide-react";
+import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import CollaborateButton from "@/components/CollaborateButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import ChooseLanguage from "@/components/ChooseLanguage";
-import { nanoid } from "nanoid";
 
 import {
   DropdownMenu,

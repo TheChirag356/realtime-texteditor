@@ -1,6 +1,6 @@
 "use client";
-import React, { useEffect, useRef } from "react";
-import axios from "axios";
+
+import React, { useRef, useEffect } from "react";
 import Editor from "@monaco-editor/react";
 import * as Y from "yjs";
 import { WebrtcProvider } from "y-webrtc";
@@ -8,56 +8,129 @@ import { MonacoBinding } from "y-monaco";
 import EditorNavbar from "@/components/EditorNavbar";
 import { useTheme } from "next-themes";
 import { useUserStore } from "@/store/UserStore";
+import * as monaco from "monaco-editor";
 
 export default function Home() {
   const { theme } = useTheme();
-  // const [roomId, setRoomId] = React.useState<string | null>(null);
-  // setRoomId(nanoid());
+  const language = useUserStore((state) => state.language);
+  const username = useUserStore((state) => state.username);
 
-  // Editor value -> Yjs Text value (Value shared by multiple clients)
-  // Any changes in the editor will be reflected in the Yjs Text value
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const ydoc = useRef(new Y.Doc()).current;
+  const decorationsRef = useRef<string[]>([]);
+  const awarenessRef = useRef<WebrtcProvider | null>(null);
 
-  //Initialize Yjs document, then make it listen to monaco
-  const editorRef = useRef<any>(null);
-  const handleEditorDidMount = (editor: any, monaco) => {
+  useEffect(() => {
+    return () => {
+      if (awarenessRef.current) {
+        awarenessRef.current.destroy();
+      }
+    };
+  }, []);
+
+  function handleEditorDidMount(
+    editor: monaco.editor.IStandaloneCodeEditor,
+    monacoInstance: typeof monaco
+  ) {
     editorRef.current = editor;
-    // Initialize Yjs document
-    const doc = new Y.Doc(); // Collection of shared objects -> Text
-    // Connect to peers with WebRTC
-    const provider = new WebrtcProvider("my-room", doc);
-    const type = doc.getText("monaco");
-    const undoManager = new Y.UndoManager(type);
-    const awareness = provider.awareness;
 
-    awareness.setLocalStateField("user", {
-      name: "User",
-      color: "#ff0000",
+    const provider = new WebrtcProvider("my-room-name", ydoc, {
+      signaling: [
+        "wss://signaling.yjs.dev",
+        "wss://y-webrtc-signaling-eu.herokuapp.com",
+        "wss://y-webrtc-signaling-us.herokuapp.com",
+      ],
+    });
+    awarenessRef.current = provider;
+
+    const type = ydoc.getText("monaco");
+    const model = editor.getModel();
+
+    if (model) {
+      new MonacoBinding(type, model, new Set([editor]), provider.awareness);
+    } else {
+      console.error("Editor model is null. MonacoBinding not initialized.");
+    }
+
+    const userColor = "#" + (((1 << 24) * Math.random()) | 0).toString(16);
+
+    provider.awareness.setLocalStateField("user", {
+      name: username || "Anonymous",
+      color: userColor,
     });
 
-    // Bind Yjs to Monaco editor
-    const binding = new MonacoBinding(
-      type,
-      editorRef.current.getModel(),
-      new Set([editorRef.current]),
-      awareness
-    );
+    editor.onDidChangeCursorSelection((e) => {
+      provider.awareness.setLocalStateField("cursor", {
+        position: e.selection.getPosition(),
+        selection: {
+          start: e.selection.getStartPosition(),
+          end: e.selection.getEndPosition(),
+        },
+      });
+    });
 
-    if (provider) {
-      provider.disconnect(); //We destroy doc we created and disconnect
-      doc.destroy(); //the provider to stop propagting changes if user leaves editor
-    }
-  };
+    provider.awareness.on("change", () => {
+      const states = provider.awareness.getStates();
+      const currentDecorations: monaco.editor.IModelDeltaDecoration[] = [];
 
-  // a file path, a language,
+      states.forEach((state, clientID) => {
+        if (clientID === provider.awareness.clientID) return;
+        const { cursor, user } = state;
+        if (!cursor?.position) return;
 
-  const language = useUserStore((state) => state.language);
+        const className = `remote-cursor-${clientID}`;
+        if (!document.querySelector(`style[data-client="${className}"]`)) {
+          const style = document.createElement("style");
+          style.dataset.client = className;
+          style.innerHTML = `
+            .${className} {
+              border-left: 2px solid ${user.color};
+              position: relative;
+            }
+            .${className}::after {
+              content: "${user.name}";
+              background: ${user.color};
+              color: white;
+              padding: 2px 4px;
+              font-size: 10px;
+              position: absolute;
+              transform: translateY(-100%);
+              z-index: 100;
+              white-space: nowrap;
+            }
+          `;
+          document.head.appendChild(style);
+        }
+
+        currentDecorations.push({
+          range: new monacoInstance.Range(
+            cursor.position.lineNumber,
+            cursor.position.column,
+            cursor.position.lineNumber,
+            cursor.position.column
+          ),
+          options: {
+            className,
+            stickiness:
+              monacoInstance.editor.TrackedRangeStickiness
+                .NeverGrowsWhenTypingAtEdges,
+          },
+        });
+      });
+
+      decorationsRef.current = editor.deltaDecorations(
+        decorationsRef.current,
+        currentDecorations
+      );
+    });
+  }
 
   return (
     <>
       <EditorNavbar className="mb-8" />
       <Editor
-        height={"100vh"}
-        width={"100vw"}
+        height="100vh"
+        width="100vw"
         theme={theme === "dark" ? "vs-dark" : "light"}
         defaultLanguage={language}
         onMount={handleEditorDidMount}
