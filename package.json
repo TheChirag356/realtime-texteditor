@@ -21,7 +21,6 @@
     "clsx": "^2.1.1",
     "immer": "^10.1.1",
     "lucide-react": "^0.509.0",
-    "nanoid": "^5.1.5",
     "next": "15.3.2",
     "next-themes": "^0.4.6",
     "random-name": "^0.1.2",
@@ -30,7 +29,6 @@
     "tailwind-merge": "^3.2.0",
     "y-monaco": "^0.1.6",
     "y-webrtc": "^10.3.0",
-    "y-websocket": "^3.0.0",
     "yjs": "^13.6.26",
     "zustand": "^5.0.4"
   },
